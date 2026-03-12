@@ -7,6 +7,7 @@ import com.igot.cb.util.CbServerProperties;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.igot.cb.util.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,7 +86,7 @@ public class CacheService {
         try (Jedis jedis = jedisPool.getResource()) {
             return jedis.get(key);
         } catch (Exception e) {
-            logger.error("Error while reading the cache",e);
+            logger.error("Error while reading the cache", e);
             return null;
         }
     }
@@ -139,5 +140,14 @@ public class CacheService {
             logger.error("Error in hget: ", e);
         }
         return resultList;
+    }
+
+    public boolean isRedisHealthy() {
+        try (Jedis jedis = jedisPool.getResource()) {
+            return Constants.REDIS_PONG_RESPONSE.equalsIgnoreCase(jedis.ping());
+        } catch (Exception e) {
+            log.error("Redis health check failed", e);
+            return false;
+        }
     }
 }

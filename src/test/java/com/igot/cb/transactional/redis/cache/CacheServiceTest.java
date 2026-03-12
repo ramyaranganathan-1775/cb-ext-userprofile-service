@@ -2,6 +2,7 @@ package com.igot.cb.transactional.redis.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.igot.cb.util.CbServerProperties;
+import com.igot.cb.util.Constants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -62,7 +63,7 @@ class CacheServiceTest {
 
     @Test
     void hset_SetsValueAndTTL() {
-        cacheService.hset("key", 0, "field", "value",0);
+        cacheService.hset("key", 0, "field", "value", 0);
         verify(jedis).hset("key", "field", "value");
         verify(jedis).expire("key", 84600);
     }
@@ -153,7 +154,7 @@ class CacheServiceTest {
     @Test
     void hset_DoesNotThrow_OnException() {
         doThrow(new RuntimeException("fail")).when(jedis).hset("key", "field", "value");
-        cacheService.hset("key", 0, "field", "value",0);
+        cacheService.hset("key", 0, "field", "value", 0);
         assertNotNull(cacheService);
     }
 
@@ -193,5 +194,29 @@ class CacheServiceTest {
         when(jedis.mget("k1")).thenReturn(List.of());
         Map<String, String> result = cacheService.getCourseMetadataAsJsonString(List.of("k1"));
         assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void isRedisHealthy_ShouldReturnTrue_WhenPingSuccessful() {
+
+        when(jedisPool.getResource()).thenReturn(jedis);
+        when(jedis.ping()).thenReturn(Constants.REDIS_PONG_RESPONSE);
+
+        boolean result = cacheService.isRedisHealthy();
+
+        assertTrue(result);
+
+        verify(jedis).ping();
+        verify(jedis).close();
+    }
+
+    @Test
+    void isRedisHealthy_ShouldReturnFalse_WhenExceptionOccurs() {
+
+        when(jedisPool.getResource()).thenThrow(new RuntimeException("Redis Down"));
+
+        boolean result = cacheService.isRedisHealthy();
+
+        assertFalse(result);
     }
 }
