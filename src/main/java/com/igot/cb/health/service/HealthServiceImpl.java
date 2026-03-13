@@ -1,5 +1,6 @@
 package com.igot.cb.health.service;
 
+import com.igot.cb.transactional.elasticsearch.service.EsClientService;
 import jakarta.persistence.EntityManager;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
@@ -33,8 +34,8 @@ public class HealthServiceImpl implements HealthService {
     @Autowired
     EntityManager entityManager;
 
-    @Qualifier("igotESClient")
-    RestHighLevelClient igotESClient;
+    @Autowired
+    EsClientService esClientService;
 
     private Logger log = LoggerFactory.getLogger(getClass().getName());
 
@@ -107,28 +108,18 @@ public class HealthServiceImpl implements HealthService {
 
 
     private void elasticsearchHealthStatus(ApiResponse response) {
+
         Map<String, Object> result = new HashMap<>();
-        result.put(Constants.NAME, "elasticsearch client");
-        Boolean res = true;
-        try {
-            ClusterHealthRequest request = new ClusterHealthRequest();
-            ClusterHealthResponse healthResponse = igotESClient.cluster().health(request, RequestOptions.DEFAULT);
+        result.put(Constants.NAME, Constants.REDIS_CACHE);
 
-            // Check if cluster is healthy (green or yellow status)
-            String clusterStatus = healthResponse.getStatus().toString().toLowerCase();
-            if (!"green".equals(clusterStatus) && !"yellow".equals(clusterStatus)) {
-                res = false;
-                response.put(Constants.HEALTHY, res);
-            }
+        boolean isHealthy = esClientService.isElasticsearchHealthy();
 
-            result.put(Constants.HEALTHY, res);
-            ((List<Map<String, Object>>) response.get(Constants.CHECKS)).add(result);
-        } catch (Exception e) {
-            // Handle connection failures
-            res = false;
-            response.put(Constants.HEALTHY, res);
-            result.put(Constants.HEALTHY, res);
-            ((List<Map<String, Object>>) response.get(Constants.CHECKS)).add(result);
+        result.put(Constants.HEALTHY, isHealthy);
+
+        ((List<Map<String, Object>>) response.get(Constants.CHECKS)).add(result);
+
+        if (!isHealthy) {
+            response.put(Constants.HEALTHY, false);
         }
     }
 

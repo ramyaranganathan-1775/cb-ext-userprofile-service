@@ -33,4 +33,5 @@ public interface EsClientService {
    * @return The document as a Map<String, Object>, or null if not found.
    */
   Map<String, Object> readDocument(String esIndexName, String id);
+  boolean isElasticsearchHealthy();
 }
