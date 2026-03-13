@@ -1,4 +1,4 @@
-package com.igot.cb.health;
+package com.igot.cb.health.service;
 
 import com.igot.cb.util.ApiResponse;
 
