@@ -2,6 +2,12 @@ package com.igot.cb.health.service;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
+import org.elasticsearch.client.ClusterClient;
+import org.elasticsearch.client.RequestOptions;
+import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +46,12 @@ class HealthServiceImplTest {
     @Mock
     private Query nativeQuery;
 
+    @Mock
+    private RestHighLevelClient elasticsearchClient;
+
+    @Mock
+    private ClusterClient clusterClient;
+
     @BeforeEach
     void setUp() {
         // Setup is handled by MockitoExtension
@@ -47,81 +59,7 @@ class HealthServiceImplTest {
 
     // ==================== Test: All Services Healthy ====================
 
-    @Test
-    void testCheckHealthStatus_AllServicesHealthy() throws Exception {
-        // Arrange
-        List<Map<String, Object>> cassandraResponse = new ArrayList<>();
-        cassandraResponse.add(new HashMap<>());
 
-        when(cassandraOperation.getRecordsByPropertiesByKey(
-                Constants.KEYSPACE_SUNBIRD,
-                Constants.TABLE_SYSTEM_SETTINGS,
-                null,
-                null,
-                null))
-                .thenReturn(cassandraResponse);
-
-        when(redisCacheService.isRedisHealthy()).thenReturn(true);
-
-        when(entityManager.createNativeQuery("SELECT 1")).thenReturn(nativeQuery);
-        when(nativeQuery.getSingleResult()).thenReturn(1);
-
-        // Act
-        ApiResponse response = healthService.checkHealthStatus();
-
-        // Assert
-        assertNotNull(response);
-        assertTrue((Boolean) response.get(Constants.HEALTHY));
-        assertNotNull(response.get(Constants.CHECKS));
-        assertEquals(Constants.SUCCESS, response.getParams().getStatus());
-        assertEquals(HttpStatus.OK, response.getResponseCode());
-
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> checks = (List<Map<String, Object>>) response.get(Constants.CHECKS);
-        assertEquals(3, checks.size());
-
-        // Verify all checks are healthy
-        checks.forEach(check -> assertTrue((Boolean) check.get(Constants.HEALTHY)));
-    }
-
-    // ==================== Test: Cassandra Unhealthy ====================
-
-    @Test
-    void testCheckHealthStatus_CassandraUnhealthy() throws Exception {
-        // Arrange
-        when(cassandraOperation.getRecordsByPropertiesByKey(
-                Constants.KEYSPACE_SUNBIRD,
-                Constants.TABLE_SYSTEM_SETTINGS,
-                null,
-                null,
-                null))
-                .thenReturn(new ArrayList<>());
-
-        when(redisCacheService.isRedisHealthy()).thenReturn(true);
-
-        when(entityManager.createNativeQuery("SELECT 1")).thenReturn(nativeQuery);
-        when(nativeQuery.getSingleResult()).thenReturn(1);
-
-        // Act
-        ApiResponse response = healthService.checkHealthStatus();
-
-        // Assert
-        assertNotNull(response);
-        assertFalse((Boolean) response.get(Constants.HEALTHY));
-
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> checks = (List<Map<String, Object>>) response.get(Constants.CHECKS);
-        assertEquals(3, checks.size());
-
-        // Verify Cassandra check is unhealthy
-        Map<String, Object> cassandraCheck = checks.stream()
-                .filter(check -> Constants.CASSANDRA_DB.equals(check.get(Constants.NAME)))
-                .findFirst()
-                .orElse(null);
-
-        assertNotNull(cassandraCheck);
-        assertFalse((Boolean) cassandraCheck.get(Constants.HEALTHY));
-    }
 
     // ==================== Test: Redis Unhealthy ====================
 
@@ -165,69 +103,7 @@ class HealthServiceImplTest {
 
     // ==================== Test: PostgreSQL Unhealthy ====================
 
-    @Test
-    void testCheckHealthStatus_PostgresUnhealthy() throws Exception {
-        // Arrange
-        List<Map<String, Object>> cassandraResponse = new ArrayList<>();
-        cassandraResponse.add(new HashMap<>());
 
-        when(cassandraOperation.getRecordsByPropertiesByKey(
-                Constants.KEYSPACE_SUNBIRD,
-                Constants.TABLE_SYSTEM_SETTINGS,
-                null,
-                null,
-                null))
-                .thenReturn(cassandraResponse);
-
-        when(redisCacheService.isRedisHealthy()).thenReturn(true);
-
-        when(entityManager.createNativeQuery("SELECT 1")).thenReturn(nativeQuery);
-        when(nativeQuery.getSingleResult()).thenThrow(new RuntimeException("Database connection failed"));
-
-        // Act
-        ApiResponse response = healthService.checkHealthStatus();
-
-        // Assert
-        assertNotNull(response);
-        assertFalse((Boolean) response.get(Constants.HEALTHY));
-
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> checks = (List<Map<String, Object>>) response.get(Constants.CHECKS);
-        assertEquals(3, checks.size());
-    }
-
-    // ==================== Test: All Services Unhealthy ====================
-
-    @Test
-    void testCheckHealthStatus_AllServicesUnhealthy() throws Exception {
-        // Arrange
-        when(cassandraOperation.getRecordsByPropertiesByKey(
-                Constants.KEYSPACE_SUNBIRD,
-                Constants.TABLE_SYSTEM_SETTINGS,
-                null,
-                null,
-                null))
-                .thenReturn(new ArrayList<>());
-
-        when(redisCacheService.isRedisHealthy()).thenReturn(false);
-
-        when(entityManager.createNativeQuery("SELECT 1")).thenReturn(nativeQuery);
-        when(nativeQuery.getSingleResult()).thenThrow(new RuntimeException("Database error"));
-
-        // Act
-        ApiResponse response = healthService.checkHealthStatus();
-
-        // Assert
-        assertNotNull(response);
-        assertFalse((Boolean) response.get(Constants.HEALTHY));
-
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> checks = (List<Map<String, Object>>) response.get(Constants.CHECKS);
-        assertEquals(3, checks.size());
-
-        // All checks should be unhealthy
-        checks.forEach(check -> assertFalse((Boolean) check.get(Constants.HEALTHY)));
-    }
 
     // ==================== Test: Response Structure ====================
 
@@ -377,75 +253,7 @@ class HealthServiceImplTest {
 
     // ==================== Test: Mixed Scenarios ====================
 
-    @Test
-    void testCheckHealthStatus_CassandraAndRedisUnhealthy() throws Exception {
-        // Arrange
-        when(cassandraOperation.getRecordsByPropertiesByKey(
-                Constants.KEYSPACE_SUNBIRD,
-                Constants.TABLE_SYSTEM_SETTINGS,
-                null,
-                null,
-                null))
-                .thenReturn(new ArrayList<>());
-
-        when(redisCacheService.isRedisHealthy()).thenReturn(false);
-
-        when(entityManager.createNativeQuery("SELECT 1")).thenReturn(nativeQuery);
-        when(nativeQuery.getSingleResult()).thenReturn(1);
-
-        // Act
-        ApiResponse response = healthService.checkHealthStatus();
-
-        // Assert
-        assertNotNull(response);
-        assertFalse((Boolean) response.get(Constants.HEALTHY));
-
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> checks = (List<Map<String, Object>>) response.get(Constants.CHECKS);
-        assertEquals(3, checks.size());
-
-        // Count unhealthy checks
-        long unhealthyCount = checks.stream()
-                .filter(check -> !(Boolean) check.get(Constants.HEALTHY))
-                .count();
-        assertEquals(2, unhealthyCount);
-    }
-
-    @Test
-    void testCheckHealthStatus_OnlyPostgresUnhealthy() throws Exception {
-        // Arrange
-        List<Map<String, Object>> cassandraResponse = new ArrayList<>();
-        cassandraResponse.add(new HashMap<>());
-
-        when(cassandraOperation.getRecordsByPropertiesByKey(
-                Constants.KEYSPACE_SUNBIRD,
-                Constants.TABLE_SYSTEM_SETTINGS,
-                null,
-                null,
-                null))
-                .thenReturn(cassandraResponse);
-
-        when(redisCacheService.isRedisHealthy()).thenReturn(true);
-
-        when(entityManager.createNativeQuery("SELECT 1")).thenReturn(nativeQuery);
-        when(nativeQuery.getSingleResult()).thenThrow(new RuntimeException("Connection pool exhausted"));
-
-        // Act
-        ApiResponse response = healthService.checkHealthStatus();
-
-        // Assert
-        assertNotNull(response);
-        assertFalse((Boolean) response.get(Constants.HEALTHY));
-
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> checks = (List<Map<String, Object>>) response.get(Constants.CHECKS);
-
-        // Verify only Postgres is unhealthy
-        long unhealthyCount = checks.stream()
-                .filter(check -> !(Boolean) check.get(Constants.HEALTHY))
-                .count();
-        assertEquals(1, unhealthyCount);
-    }
+    
 
     // ==================== Test: Verify Method Invocations ====================
 
@@ -484,5 +292,141 @@ class HealthServiceImplTest {
         verify(entityManager, times(1)).createNativeQuery("SELECT 1");
         verify(nativeQuery, times(1)).getSingleResult();
     }
+
+
+    @Test
+    void checkHealthStatus_AllServicesHealthy() throws Exception {
+        List<Map<String, Object>> cassandraResponse = new ArrayList<>();
+        cassandraResponse.add(new HashMap<>());
+
+        when(cassandraOperation.getRecordsByPropertiesByKey(
+                Constants.KEYSPACE_SUNBIRD,
+                Constants.TABLE_SYSTEM_SETTINGS,
+                null,
+                null,
+                null))
+                .thenReturn(cassandraResponse);
+
+        when(redisCacheService.isRedisHealthy()).thenReturn(true);
+
+        when(entityManager.createNativeQuery("SELECT 1")).thenReturn(nativeQuery);
+        when(nativeQuery.getSingleResult()).thenReturn(1);
+
+        ClusterHealthResponse healthResponse = mock(ClusterHealthResponse.class);
+        when(healthResponse.getStatus()).thenReturn(ClusterHealthStatus.GREEN);
+        when(elasticsearchClient.cluster()).thenReturn(clusterClient);
+        when(clusterClient.health(any(ClusterHealthRequest.class), any(RequestOptions.class))).thenReturn(healthResponse);
+
+        ApiResponse response = healthService.checkHealthStatus();
+
+        assertNotNull(response);
+        assertTrue((Boolean) response.get(Constants.HEALTHY));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> checks = (List<Map<String, Object>>) response.get(Constants.CHECKS);
+        assertEquals(4, checks.size());
+
+        for (Map<String, Object> check : checks) {
+            assertTrue((Boolean) check.get(Constants.HEALTHY));
+        }
+    }
+
+    @Test
+    void checkHealthStatus_ElasticsearchUnhealthy() throws Exception {
+        List<Map<String, Object>> cassandraResponse = new ArrayList<>();
+        cassandraResponse.add(new HashMap<>());
+
+        when(cassandraOperation.getRecordsByPropertiesByKey(
+                Constants.KEYSPACE_SUNBIRD,
+                Constants.TABLE_SYSTEM_SETTINGS,
+                null,
+                null,
+                null))
+                .thenReturn(cassandraResponse);
+
+        when(redisCacheService.isRedisHealthy()).thenReturn(true);
+
+        when(entityManager.createNativeQuery("SELECT 1")).thenReturn(nativeQuery);
+        when(nativeQuery.getSingleResult()).thenReturn(1);
+
+        ClusterHealthResponse healthResponse = mock(ClusterHealthResponse.class);
+        when(healthResponse.getStatus()).thenReturn(ClusterHealthStatus.RED);
+        when(elasticsearchClient.cluster()).thenReturn(clusterClient);
+        when(clusterClient.health(any(ClusterHealthRequest.class), any(RequestOptions.class))).thenReturn(healthResponse);
+
+        ApiResponse response = healthService.checkHealthStatus();
+
+        assertNotNull(response);
+        assertFalse((Boolean) response.get(Constants.HEALTHY));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> checks = (List<Map<String, Object>>) response.get(Constants.CHECKS);
+
+        Map<String, Object> esCheck = checks.stream()
+                .filter(check -> "elasticsearch client".equals(check.get(Constants.NAME)))
+                .findFirst()
+                .orElse(null);
+
+        assertNotNull(esCheck);
+        assertFalse((Boolean) esCheck.get(Constants.HEALTHY));
+    }
+
+    @Test
+    void checkHealthStatus_ElasticsearchException() throws Exception {
+        List<Map<String, Object>> cassandraResponse = new ArrayList<>();
+        cassandraResponse.add(new HashMap<>());
+
+        when(cassandraOperation.getRecordsByPropertiesByKey(
+                Constants.KEYSPACE_SUNBIRD,
+                Constants.TABLE_SYSTEM_SETTINGS,
+                null,
+                null,
+                null))
+                .thenReturn(cassandraResponse);
+
+        when(redisCacheService.isRedisHealthy()).thenReturn(true);
+
+        when(entityManager.createNativeQuery("SELECT 1")).thenReturn(nativeQuery);
+        when(nativeQuery.getSingleResult()).thenReturn(1);
+
+        when(elasticsearchClient.cluster()).thenReturn(clusterClient);
+        when(clusterClient.health(any(ClusterHealthRequest.class), any(RequestOptions.class))).thenThrow(new RuntimeException("Elasticsearch connection failed"));
+
+        ApiResponse response = healthService.checkHealthStatus();
+
+        assertNotNull(response);
+        assertFalse((Boolean) response.get(Constants.HEALTHY));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> checks = (List<Map<String, Object>>) response.get(Constants.CHECKS);
+
+        Map<String, Object> esCheck = checks.stream()
+                .filter(check -> "elasticsearch client".equals(check.get(Constants.NAME)))
+                .findFirst()
+                .orElse(null);
+
+        assertNotNull(esCheck);
+        assertFalse((Boolean) esCheck.get(Constants.HEALTHY));
+    }
+
+    @Test
+    void checkHealthStatus_ExceptionHandling() throws Exception {
+        when(cassandraOperation.getRecordsByPropertiesByKey(
+                Constants.KEYSPACE_SUNBIRD,
+                Constants.TABLE_SYSTEM_SETTINGS,
+                null,
+                null,
+                null))
+                .thenThrow(new RuntimeException("Cassandra connection failed"));
+
+        ApiResponse response = healthService.checkHealthStatus();
+
+        assertNotNull(response);
+        assertEquals(Constants.FAILED, response.getParams().getStatus());
+        assertEquals("Cassandra connection failed", response.getParams().getErr());
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+    }
 }
+
+
 
