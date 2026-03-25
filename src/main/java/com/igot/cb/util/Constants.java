@@ -510,6 +510,12 @@ public class Constants {
     // Redis
     public static final String REDIS_CACHE = "redis cache";
     public static final String REDIS_PONG_RESPONSE = "PONG";
+    public static final String POSTGRES_DB = "Postgres Service";
+    public static final String ELASTIC_SEARCH = "Elastic Search Service";
+    public static final String ALL_HEALTH_CHECK = "Complete Health Check Api";
+    public static final String FALSE = "false";
+    public static final String ERR = "err";
+
     private Constants() {
     }
 }

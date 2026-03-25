@@ -1,6 +1,7 @@
 package com.igot.cb.util;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -99,4 +100,12 @@ public class ProjectUtil {
         return propertiesCache.readProperty(key);
     }
 
+    public static Map<String, Object> createDefaultMapResponse(String api, String err, String errMsg) {
+        Map<String, Object> response = new HashMap<>();
+        response.put(Constants.HEALTHY, Constants.TRUE);
+        response.put(Constants.NAME, api);
+        response.put(Constants.ERR, err != null ? err : "");
+        response.put(Constants.ERROR_MESSAGE, errMsg != null ? errMsg : "");
+        return response;
+    }
 }
